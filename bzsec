@@ -1,0 +1,114 @@
+#!/usr/bin/env python
+
+import argparse
+import bugzilla
+import os
+import tomllib
+
+CONFIG_DIR = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+    "bzsec")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.toml")
+
+GENTOO_BUGZILLA_URL = "https://bugs.gentoo.org/xmlrpc.cgi"
+
+API_KEY=""
+
+class Bugzilla:
+    __slots__ = ['bz', 'config']
+    
+    def __init__(self, api_key=None):
+        self.config = self.load_config()
+        
+        if api_key == None:
+            self.api_key = self.get_config_value("api_key")
+
+        self.bz = bugzilla.Bugzilla(GENTOO_BUGZILLA_URL, api_key=api_key)
+
+    def make_query(self, whiteboard="upstream ebuild stable cleanup glsa ??"):
+        to_query = self.bz.build_query(product="Gentoo Security", component="Vulnerabilities",
+                            status=["CONFIRMED", "UNCONFIRMED", "IN_PROGRESS"],
+                            status_whiteboard=whiteboard,
+                            status_whiteboard_type="anywordssubstr")
+        return self.bz.query(to_query)
+    
+    def load_config(self):
+        if not os.path.isfile(CONFIG_FILE):
+            os.makedirs(CONFIG_DIR)
+            with open(CONFIG_FILE, "w", encoding="utf_8") as config:
+                config.write("[gentodo]\n")
+        with open(CONFIG_FILE, "rb") as config:
+            return tomllib.load(config)
+
+    def get_config_value(self, key):
+        try:
+            return self.config['gentodo'][key]
+        except KeyError:
+            print(f"The following key was not found: {key}")
+            sys.exit(1)
+
+
+    def query_bugz(self, whiteboard):
+        return self.make_query(whiteboard)
+    
+    def get_bugz(self, whiteboard):
+        return [bug.id for bug in self.query_bugz(whiteboard)]
+
+
+def setup_parser():
+    parser = argparse.ArgumentParser(
+            prog="bchk",
+            description="Tool for finding Security bugs")
+
+    parser.add_argument('-u', '--upstream', action='store_true', help='Show bugs with [upstream] in their whiteboard')
+    parser.add_argument('-e', '--ebuild', action='store_true', help='Show bugs with [ebuild] in their whiteboard')
+    parser.add_argument('-s', '--stable', action='store_true', help='Show bugs with [stable] in their whiteboard')
+    parser.add_argument('-g', '--glsa', action='store_true', help='Show bugs with [glsa] in their whiteboard')
+    parser.add_argument('-c', '--cleanup', action='store_true', help='Show bugs with [cleanup] in their whiteboard')
+    parser.add_argument('-a', '--awaiting', action='store_true', help='Append "?" to the whiteboard search (only for stable and glsa)')
+
+    return parser
+
+
+def main():
+    '''Entry Point'''
+
+    parser = setup_parser()
+    args = parser.parse_args()
+    
+    if args.awaiting and not (args.stable or args.glsa):
+        raise ValueError("Awaiting (-a / --awaiting) added for non-awaiting searches")
+
+    bugz = Bugzilla(API_KEY)
+
+    
+    if args.upstream:
+        print("Bugs waiting for upstream:")
+        print(bugz.get_bugz("upstream"))
+
+    if args.ebuild:
+        print("Bugs needing bumps:")
+        print(bugz.get_bugz("ebuild"))
+
+    if args.stable:
+        if args.awaiting:
+            print("Bugs potentially needing a STABLEREQ:")
+            print(bugz.get_bugz("stable?"))
+        else:
+            print("Bugs with an open STABLEREQ:")
+            print(bugz.get_bugz("stable"))
+    
+    if args.glsa:
+        if args.awaiting:
+            print("Bugs potentially needing a STABLEREQ:")
+            print(bugz.get_bugz("stable?"))
+        else:
+            print("Bugs with an open STABLEREQ:")
+            print(bugz.get_bugz("stable"))
+
+    if args.cleanup:
+        print("Bugs Awaiting STABLEREQs:")
+        print(bugz.get_bugz("cleanup"))
+
+if __name__ == "__main__":
+    main()
