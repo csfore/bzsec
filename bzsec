@@ -3,6 +3,7 @@
 import argparse
 import bugzilla
 import os
+import sys
 import tomllib
 
 CONFIG_DIR = os.path.join(
@@ -12,10 +13,8 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "config.toml")
 
 GENTOO_BUGZILLA_URL = "https://bugs.gentoo.org/xmlrpc.cgi"
 
-API_KEY=""
-
 class Bugzilla:
-    __slots__ = ['bz', 'config']
+    __slots__ = ['bz', 'config', 'api_key']
     
     def __init__(self, api_key=None):
         self.config = self.load_config()
@@ -23,7 +22,7 @@ class Bugzilla:
         if api_key == None:
             self.api_key = self.get_config_value("api_key")
 
-        self.bz = bugzilla.Bugzilla(GENTOO_BUGZILLA_URL, api_key=api_key)
+        self.bz = bugzilla.Bugzilla(GENTOO_BUGZILLA_URL, api_key=self.api_key)
 
     def make_query(self, whiteboard="upstream ebuild stable cleanup glsa ??"):
         to_query = self.bz.build_query(product="Gentoo Security", component="Vulnerabilities",
@@ -79,7 +78,7 @@ def main():
     if args.awaiting and not (args.stable or args.glsa):
         raise ValueError("Awaiting (-a / --awaiting) added for non-awaiting searches")
 
-    bugz = Bugzilla(API_KEY)
+    bugz = Bugzilla()
 
     
     if args.upstream:
