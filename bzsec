@@ -36,13 +36,13 @@ class Bugzilla:
         if not os.path.isfile(CONFIG_FILE):
             os.makedirs(CONFIG_DIR)
             with open(CONFIG_FILE, "w", encoding="utf_8") as config:
-                config.write("[gentodo]\n")
+                config.write("[bzsec]\n")
         with open(CONFIG_FILE, "rb") as config:
             return tomllib.load(config)
 
     def get_config_value(self, key):
         try:
-            return self.config['gentodo'][key]
+            return self.config['bzsec'][key]
         except KeyError:
             print(f"The following key was not found: {key}")
             sys.exit(1)
